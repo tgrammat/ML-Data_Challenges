@@ -1,1 +1,1 @@
-# Independent Coursework & Data Challenges in Machine Learning Methods
+# Coursework & Data Challenges in Machine Learning Methods
