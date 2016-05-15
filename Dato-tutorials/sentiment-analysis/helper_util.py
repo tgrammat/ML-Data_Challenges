@@ -24,14 +24,17 @@ def get_comparisons(a, b, item_a, item_b, aspects):
     sentiment = a2.join(b2)
 
     # Get a list of adjectives
+    # stack rows modified by theod for GLC v1.9 compatibility
     a2 = a.select_columns(['tag', 'adjectives'])\
-          .stack('adjectives', 'adjective')\
-          .filter_by(aspects, 'adjective', exclude=True)\
-          .groupby(['tag'], {item_a: gl.aggregate.CONCAT('adjective')})
+        .stack('adjectives', ['ADJ','adjectives'])\
+        .stack('adjectives', ['adjective','count'])\
+        .filter_by(aspects, 'adjective', exclude=True)\
+        .groupby(['tag'], {item_a: gl.aggregate.CONCAT('adjective')})
     b2 = b.select_columns(['tag', 'adjectives'])\
-          .stack('adjectives', 'adjective')\
-          .filter_by(aspects, 'adjective', exclude=True)\
-          .groupby(['tag'], {item_b: gl.aggregate.CONCAT('adjective')})
+        .stack('adjectives', ['ADJ','adjectives'])\
+        .stack('adjectives', ['adjective','count'])\
+        .filter_by(aspects, 'adjective', exclude=True)\
+        .groupby(['tag'], {item_b: gl.aggregate.CONCAT('adjective')})
     adjectives = a2.join(b2)
 
     return counts, sentiment, adjectives
@@ -49,7 +52,7 @@ def get_dropdown(reviews):
     return item_dropdown
 
 def get_extreme_sentences(tagged, k=100):
-
+    
     def highlight(sentence, tags, color):
         for tag in tags:
             html_tag = '<span style="color:{0}">{1}</span>'.format(color, tag)
@@ -57,16 +60,26 @@ def get_extreme_sentences(tagged, k=100):
         return sentence
 
     good = tagged.topk('sentiment', k=k, reverse=False)
-    good['highlighted']  = good.apply(lambda x: highlight(x['sentence'], x['adjectives'], 'red'))
+    # row added by theod for GLC v1.9 compatibility
+    good = good.select_columns(['sentence','adjectives', 'tag'])\
+        .stack('adjectives',['ADJ','adjectives'])\
+        .stack('adjectives', ['adjective','count'])
+    # row added by theod to exclude 'None' values in the 'adjectives' column
+    good = good.dropna(columns='adjective')
+    good['highlighted']  = good.apply(lambda x: highlight(x['sentence'], [x['adjective']], 'green'))
     good['highlighted']  = good.apply(lambda x: highlight(x['highlighted'], [x['tag']], 'green'))
 
     bad = tagged.topk('sentiment', k=k, reverse=True)
-    bad['highlighted']  = bad.apply(lambda x: highlight(x['sentence'], x['adjectives'], 'red'))
+    # row added by theod for GLC v1.9 compatibility
+    bad = bad.select_columns(['sentence','adjectives', 'tag'])\
+        .stack('adjectives',['ADJ','adjectives'])\
+        .stack('adjectives', ['adjective','count'])
+    # row added by theod to exclude 'None' values in the 'adjectives' column
+    bad = bad.dropna(columns='adjective')
+    bad['highlighted']  = bad.apply(lambda x: highlight(x['sentence'], [x['adjective']], 'red'))
     bad['highlighted']  = bad.apply(lambda x: highlight(x['highlighted'], [x['tag']], 'green'))
 
     return good, bad
 
 def print_sentences(sentences):
     display(HTML('<p/>'.join(sentences)))
-
-
