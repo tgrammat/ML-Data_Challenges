@@ -1,3 +1,8 @@
+# libraries required
+import graphlab.aggregate as agg
+from matplotlib import pyplot as plt
+import seaborn as sns
+
 def item_freq_plot(data_sf, item_column, ndigits=3, topk=None, seaborn_style='whitegrid', seaborn_palette='deep', color='b'):
     '''Function for topk item frequency plot:
     
@@ -22,10 +27,7 @@ def item_freq_plot(data_sf, item_column, ndigits=3, topk=None, seaborn_style='wh
         Color for all of the elements, or seed for light_palette() 
         when using hue nesting in seaborn.barplot().
     '''
-    
-    import graphlab.aggregate as agg
-    import matplotlib.pyplot as plt
-    import seaborn as sns
+    # set seaborn style
     sns.set(style=seaborn_style)
     
     # compute the item frequencies
@@ -91,8 +93,6 @@ def segments_countplot(data_sf, x=None, y=None, hue=None, figsize_tuple= None, t
         Color for all of the elements, or seed for light_palette() 
         when using hue nesting in seaborn.barplot().
     '''
-    import matplotlib.pyplot as plt
-    import seaborn as sns
     # define the plotting style
     sns.set(style=seaborn_style)
     
@@ -133,9 +133,8 @@ def univariate_summary_plot(data_sf, attribs_list, nsubplots_inrow=3, subplots_w
         Color for all of the elements, or seed for light_palette() 
         when using hue nesting in seaborn.barplot().
     '''
+    import graphlab as gl
     
-    import matplotlib.pyplot as plt
-    import seaborn as sns
     # define the plotting style
     sns.set(style=seaborn_style)
     
@@ -156,7 +155,10 @@ def univariate_summary_plot(data_sf, attribs_list, nsubplots_inrow=3, subplots_w
     plt.rcParams['figure.figsize'] = (14, ysize)
     
     # transform the SFrame into a Pandas DataFrame
-    data_df = data_sf.to_dataframe()
+    if isinstance(data_sf, gl.data_structures.sframe.SFrame):
+        data_df = data_sf.to_dataframe()
+    else:
+        data_df = data_sf
     
     # draw the relavant univariate plots for each attribute of interest
     num_plot = 1
@@ -188,6 +190,7 @@ def univariate_summary_plot(data_sf, attribs_list, nsubplots_inrow=3, subplots_w
     summary = data_df[attribs_list].describe(include='all')
     print summary
     
+
 def plot_time_series(timestamp, values, title, **kwargs):
     plt.rcParams['figure.figsize'] = 14, 7
     plt.plot_date(timestamp, values, fmt='g-', tz='utc', **kwargs)
