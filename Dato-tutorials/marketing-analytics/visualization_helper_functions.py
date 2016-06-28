@@ -3,18 +3,23 @@ import graphlab.aggregate as agg
 from matplotlib import pyplot as plt
 import seaborn as sns
 
-def item_freq_plot(data_sf, item_column, topk=None,
-                   seaborn_style='whitegrid', seaborn_palette='deep', color='b', **kwargs):
+def item_freq_plot(data_sf, item_column, hue=None, topk=None, pct_threshold=None ,reverse=False,
+                    seaborn_style='whitegrid', seaborn_palette='deep', color='b', **kwargs):
     '''Function for topk item frequency plot:
     
     Parameters
     ----------
-    data_sf: SFrame 
-        SFrame of interest
+    data_sf: SFrame
+        SFrame for plotting. If x and y are absent, this is interpreted as wide-form. 
+        Otherwise it is expected to be long-form.
     item_column: string
-        The frequency counts of which want to visualize
+        The attribute name the frequency counts of which we want to visualize
+    hue: seaborn barplot name of variable in vector data, optional
+        Inputs for plotting long-form data. See seaborn examples for interpretation.
     topk: int, optional
         The number of most frequent items
+    pct_threshold: float in [0,100] range, optional
+        Lower frequency limit below which all the grouby counted items will be ignored.
     seaborn_style: dict, None, or one of {darkgrid, whitegrid, dark, white, ticks}
         Set the aesthetic style of the plots through the seaborn module.
         A dictionary of parameters or the name of a preconfigured set.
@@ -25,60 +30,92 @@ def item_freq_plot(data_sf, item_column, topk=None,
     color: matplotlib color, optional
         Color for all of the elements, or seed for light_palette() 
         when using hue nesting in seaborn.barplot().
-    '''
+    kwargs : key, value mappings
+        Other keyword arguments which are passed through (a)seaborn.countplot API 
+        and/or (b)plt.bar at draw time.
+    '''    
     # set seaborn style
     sns.set(style=seaborn_style)
     
-    # compute the item frequencies
-    item_counts = data_sf.groupby(item_column, agg.COUNT())
-    print 'Number of Unique Items: %d' % len(item_counts)
+    # compute the item counts: (1) apply groupby count operation,
+    # (2) check whether a nested grouping exist or not
+    if hue is not None:
+        item_counts = data_sf.groupby([item_column,hue], agg.COUNT())
+        hue_order = list(data_sf[hue].unique())
+        hue_length = len(hue_order)
+    else:
+        item_counts = data_sf.groupby(item_column, agg.COUNT())
+        hue_order=None
+        hue_length=1
+    # compute frequencies
     pcts = (item_counts['Count'] / float(item_counts['Count'].sum())) * 100
     item_counts['Percent'] = pcts
     
-    # determine the ysize per item 
-    ysize_per_item = 0.5
+    # apply a percentage threshold if any
+    if((pct_threshold is not None) & (pct_threshold < 100)):
+        item_counts = item_counts[item_counts['Percent'] >= pct_threshold]
+    elif((pct_threshold is not None) & (pct_threshold >=1)):
+        print 'The frequency threshold was unacceptably high.',\
+        'and have been removed from consideration.',\
+        'If you want to use this flag please choose a value lower than one.'
     
+    # print the number of remaining item counts
+    print 'Number of Unique Items: %d' % len(item_counts)
+    
+    # determine the ysize per item 
+    ysize_per_item = 0.5 * hue_length
+    
+    # apply topk/sort operations
     if((topk is not None) & (topk < len(item_counts))):
-        item_counts = item_counts.topk('Percent', k=topk)
+        item_counts = item_counts.topk('Percent', k=topk, reverse=reverse)
         ysize = ysize_per_item * topk
         print 'Number of Most Frequent Items, Visualized: %d' % topk
     else:
         item_counts = item_counts.sort('Percent', ascending=False)
         ysize = ysize_per_item * len(item_counts)
         print 'Number of Most Frequent Items, Visualized: %d' % len(item_counts)
-    
-    # transform the SFrame into a Pandas DataFrame
-    item_counts = item_counts.to_dataframe()
            
-    # initialize the matplotlib figure      
-    ax = plt.figure(figsize=(8, ysize))
+    # transform the item_counts SFrame into a Pandas DataFrame
+    item_counts_df = item_counts.to_dataframe()
+    
+    # initialize the matplotlib figure
+    ax = plt.figure(figsize=(7, ysize))
     
     # plot the Freq Percentages of the topk Items
-    sns.set_color_codes(seaborn_palette)
-    ax = sns.barplot(x='Percent', y=item_column, data=item_counts,
-                label='Item Frequency', color=color, **kwargs)
+    ax = sns.barplot(x='Percent', y=item_column, hue=hue, data=item_counts_df, 
+                     order=list(item_counts_df[item_column]), hue_order=hue_order,
+                     orient='h', color='b', palette='deep')
     
     # add informative axis labels
+    # make final plot adjustments
     xmax = max(item_counts['Percent'])    
     ax.set(xlim=(0, xmax),
-           ylabel=item_column,
-           xlabel='Most Frequent Items')
-    # make final plot adjustments
+           ylabel= item_column,
+           xlabel='Most Frequent Items\n(% of total occurences)')
+    if hue is not None:
+        ax.legend(ncol=hue_length, loc="lower right", frameon=True)
     sns.despine(left=True, bottom=True)
-    
-    
-def segments_countplot(data_sf, x=None, y=None, hue=None, figsize_tuple= None, title=None,
-                       seaborn_style='whitegrid', seaborn_palette='deep', color='b', **kwargs):
+
+
+def segments_countplot(data_sf, x=None, y=None, hue=None, 
+                       order=None, hue_order=None, figsize_tuple= None, title=None,
+                       seaborn_style='whitegrid', seaborn_palette='deep', color='b', 
+                       **kwargs):
     '''Function for fancy seaborn barplot:
     
     Parameters
     ----------
-    data_sf: SFrame 
-        SFrame of interest
-    x, y, hue : seaborn countplot names of variables in data or vector data, optional
+    data_sf: SFrame
+        SFrame for plotting. If x and y are absent, this is interpreted as wide-form.
+        Otherwise it is expected to be long-form.
+    x, y, hue: seaborn countplot names of variables in data or vector data, optional
         Inputs for plotting long-form data. See examples for interpretation.
+    order, hue_order: seaborn countplot lists of strings, optional
+        Order to plot the categorical levels in, otherwise the levels are inferred from the data objects.
     figsize_tuple: tuple of integers, optional, default: None
         width, height in inches. If not provided, defaults to rc figure.figsize.
+    title: string
+        Provides the countplot title.
     seaborn_style: dict, None, or one of {darkgrid, whitegrid, dark, white, ticks}
         Set the aesthetic style of the plots through the seaborn module.
         A dictionary of parameters or the name of a preconfigured set.
@@ -89,6 +126,9 @@ def segments_countplot(data_sf, x=None, y=None, hue=None, figsize_tuple= None, t
     color: matplotlib color, optional
         Color for all of the elements, or seed for light_palette() 
         when using hue nesting in seaborn.barplot().
+    kwargs : key, value mappings
+        Other keyword arguments which are passed through (a)seaborn.countplot API 
+        and/or (b)plt.bar at draw time.
     '''
     # define the plotting style
     sns.set(style=seaborn_style)
@@ -100,10 +140,13 @@ def segments_countplot(data_sf, x=None, y=None, hue=None, figsize_tuple= None, t
     data_df = data_sf.to_dataframe()
 
     # plot the segments counts
-    sns.countplot(x='cluster_id', data=data_df, 
-                      palette=seaborn_palette, color=color, **kwargs)
-    sns.despine(left=True, bottom=True)
+    ax = sns.countplot(x=x, y=y, hue=hue, data=data_df, order=order, hue_order=hue_order,
+                       orient='v', palette=seaborn_palette, color=color, **kwargs)
+    
+    # add informative axis labels, title
+    # make final plot adjustments
     plt.title(title, {'fontweight': 'bold'})
+    sns.despine(left=True, bottom=True)
     plt.show()
 
 
